@@ -304,20 +304,22 @@ Adımlar bu sırayla uygulanır. **Yetkilendirme, hiçbir saklanan sonuç, `conf
 | `conflict` | Kullanıcı kararı gerekir. | `conflict`. | Kaydı Conflict Inbox'a taşır. |
 | `rejected` | Kalıcı hata. | `error`. | Outbox kaydını hata koduyla işaretler, kullanıcıya gösterir. |
 
-Geçici hatalarda (ağ, 5xx, `SERVER_ERROR`, `TOO_MANY_ATTEMPTS`, `IDEMPOTENCY_IN_PROGRESS`) sonuç yoktur; istemci partiyi aynı anahtarlarla geri çekilerek yeniden gönderir.
+Geçici hatalarda (ağ, 5xx, `SERVER_ERROR`, `TOO_MANY_ATTEMPTS`, `IDEMPOTENCY_IN_PROGRESS`) sonuç yoktur; istemci aynı anahtarlarla geri çekilerek yeniden gönderir. Çok mutasyonlu istekte geçici hatadan sonra gönderim tekli yapılır (aşağıdaki son madde).
 
 - Bir mutasyon sırasında geçici hata oluşursa o mutasyonun transaction'ı (idempotency kaydı dahil) geri alınır ve **tüm push isteği** bu hatayla, istek düzeyindeki hata zarfında döner. Sonuç listesi dönmez.
 - Partide daha önce işlenen mutasyonlar kendi transaction'larında commit edilmiş kalır ve sonuçları saklanmıştır. Aynı anahtarlarla yeniden gönderimde bunlar saklanan sonuçlarıyla (`applied` için `duplicate`) döner; işleme hatanın oluştuğu mutasyondan devam eder.
 - **Meşgul satır kilidi.** Mutasyon transaction'ı içinde, hedef satırın `FOR UPDATE` kilidinde (`lock_timeout`) veya yazarın içinde (`NOWAIT`) oluşan SQLSTATE `55P03` mutasyon sonucu değildir: push isteği düzeyinde HTTP 409 `IDEMPOTENCY_IN_PROGRESS` ve `Retry-After: 1` döner (`Sync/Services/PushService.php:139-152`). REST'teki `VERSION_CONFLICT` eşlemesi burada kullanılmaz; çünkü conflict sonucu 7 gün saklanır ve aynı anahtarın her tekrarında yeniden döner (geçici bir kilit için istemciye gereksiz çözüm ekranı açardı). Yalnız kilide takılan mutasyonun transaction'ı (idempotency kaydı dahil) geri alınır; partide ondan önceki mutasyonlar commit'li ve sonuçları saklı kalır. İstemci partiyi aynı anahtarlarla yeniden gönderdiğinde önceki sonuçlar saklanan sonuçlarıyla, `replayed: true` olarak döner (5. adım: `applied` → `duplicate`; `conflict` ve `rejected` statüsünü korur, `VERSION_CONFLICT`/`DOCUMENT_LOCKED` conflict'inde `server_version` ve `server_data` güncel satırdan yeniden üretilir; `Core/Sync/WriteOutcome.php:74-80`, `PushService.php:436-458`). Kilide takılan mutasyon yeniden denenir.
 - Aynı mutasyon sürekli geçici hata alıyorsa sunucu tarafında bir karantina yoktur. İstemci kaydı kendi tarafında karantinaya alır: sonraki partilere koymaz ve kullanıcıya gösterir.
+- Çok mutasyonlu bir push isteğinde geçici hata deneme sayılmaz; istemci sonraki gönderimleri tek mutasyonlu yapar (gönderilebilir kuyruk boşalana kadar) ve deneme yalnız tekli istekte sayılır.
 
 **Sürüm kuralı (istemci).** Push sonucu yerel satırı asla geriletmez:
 
-- **Yerel satır yoksa push `data`'sı hiçbir zaman uygulanmaz** (`applied` ve `duplicate` için aynı kural). Satır arada tombstone, `out_of_scope` veya reset ile kaldırılmış olabilir ve `data` o kaldırmadan eski olabilir. İstemci outbox kaydını kapatır ve kaynağın `detail_path` ucundan güncel durumu ister: 200 dönerse yanıt, kaynağın pencere ve kapsam kuralından geçiyorsa uygulanır; 404/403 dönerse veya pencere dışındaysa satır yerelde yok kalır. Çevrimdışıysa doğrulama bir sonraki bağlantıya ertelenir; o zamana kadar satır eklenmez.
+- **Yerel satır yoksa push `data`'sı uygulanmaz** (`applied` ve `duplicate` için aynı kural; tek istisna, aşağıdaki yerel create işaretidir). Satır arada tombstone, `out_of_scope` veya reset ile kaldırılmış olabilir ve `data` o kaldırmadan eski olabilir. İstemci outbox kaydını kapatır ve kaynağın `detail_path` ucundan güncel durumu ister: 200 dönerse yanıt, kaynağın pencere ve kapsam kuralından geçiyorsa uygulanır; 404/403 dönerse veya pencere dışındaysa satır yerelde yok kalır. Çevrimdışıysa doğrulama bir sonraki bağlantıya ertelenir; o zamana kadar satır eklenmez.
 - Yerel satır varsa: yerel `version < data.version` ise `data` uygulanır; yerel `version >= data.version` ise (arada daha yeni bir pull uygulanmış) yerel satır korunur, yalnızca outbox kaydı kapanır.
-- Çevrimdışı oluşturulan taslağın yerel satırı outbox ile birlikte vardır; ilk `create` sonucu bu yüzden normal yoldan uygulanır.
+- Çevrimdışı oluşturulan taslağın ayna satırı yoktur; taslak, outbox ile birlikte tutulan ayrı bir yerel create işaretiyle izlenir. İlk `create` sonucu bu işaret varsa uygulanır; tombstone, pull satırı, reset veya silme işareti düşürür.
 - `data: null` (delete): yerel satır yoksa bir şey yapılmaz. Yerel `version` delete mutasyonunun `base_version` değerine eşit ya da küçükse satır silinir. Büyükse satır silinmez; kaynak bir sonraki pull'da yeniden doğrulanır (tombstone gelirse silinir, canlı satır gelirse kalır).
-- Cursor bu kuraldan etkilenmez; pull ile gelen olaylar her zaman uygulanır.
+- Cursor bu kuraldan etkilenmez. Pull olayları için kural: istemci bir pull satırını yalnız yerel sürüm kesinlikle daha yeniyse atlar; eşit sürüm uygulanır. Tam indirmeyi başlatan sayfa (`reset: true` veya `cursor: null`) yerel kopyayı siler ve satırları atlamadan yazar; aynı indirmenin sonraki sayfaları bu sürüm kuralına tabidir.
+- Aynı sürüm kuralı push/replay (`duplicate`) sonucuna ve `take_server` çözümüne de uygulanır: daha yeni yerel sürüm geriletilmez, silinmiş satır diriltilmez (`take_server` ile sunucu silmesi yerel satırı yalnız yerel sürüm sunucu sürümünden yeni değilse siler). `data: null` satırı yalnız yerel `version <= base_version` ise siler.
 
 ### Çakışma kuralları
 
@@ -419,11 +421,14 @@ Son dört kodun `status()` eşlemesi 422'dir, ancak bugün yalnızca push sonucu
 
 - **İlk giriş.** `POST /auth/device` erişim token'ını ve ailenin ilk refresh token'ını birlikte döner: `{data: {token, expires_at, refresh_token, refresh_expires_at}}`. Aynı kullanıcı ve fingerprint ile yeni giriş cihaz kaydını korur; önceki token çiftini ve ailesini iptal eder, cihazın tam indirme oturumlarını sonlandırır. Kullanıcı başına en fazla 10 cihaz tutulur (`identity.device_tokens.max_devices_per_user`); sınır aşılırsa last_used_at, ardından created_at sırasıyla en eski cihaz iptal edilir.
 - **Yenileme.** `POST /auth/device/refresh` gövdesi `{refresh_token}`; `Authorization` başlığı gerekmez. Sunucu token'ı `used_at` ile işaretler, aynı `family_id` içinde yeni refresh token ve yeni erişim token'ı verir, eski erişim token'ını siler. Yanıt ilk girişle aynı şekildedir.
-- **Yeniden kullanım.** `used_at` dolu bir refresh token gelirse sunucu ailenin tamamını, cihazın erişim token'larını ve cihaz kaydını iptal eder ve 401 `UNAUTHENTICATED` döner. İstemci yerel oturumu kapatır; outbox korunur ve yeniden girişten sonra gönderilir.
+- **Yeniden kullanım.** `used_at` dolu bir refresh token gelirse sunucu ailenin tamamını, cihazın erişim token'larını ve cihaz kaydını iptal eder ve 401 `UNAUTHENTICATED` döner. İstemci yerel oturumu kapatır; outbox korunur ve aynı kimlikle (`kullanıcı:şirket`) yeniden girişten sonra gönderilir (farklı kimlikte silinir).
 - **Diğer hatalar.** Bilinmeyen, süresi dolmuş veya iptal edilmiş cihaza ait refresh token: 401 `UNAUTHENTICATED`. Pasif kullanıcı: 403 `USER_DEACTIVATED`. Hız sınırı: 429 `TOO_MANY_ATTEMPTS`. Biçimsiz gövde: 422 `VALIDATION_ERROR`.
 - **Eşzamanlılık.** Eşzamanlı yenileme desteklenmez; ikinci istek yeniden kullanım sayılır. İstemci yenilemeyi tek uçuşla sıralar ve erişim token'ı `expires_at`'ten önce (ör. 5 dakika kala) yeniler.
 - **İptal.** `DELETE /me/devices/{id}`, kullanıcı pasifleştirme, parola değişimi ve yönetici sıfırlaması (`AccessRevoker`) aileyi de iptal eder.
-
+- **İstemci kimlik kuralları.** Aşağıdaki kurallar yalnız hatayı alan isteğin nesli (oturum üretimi) hâlâ güncelse uygulanır; eski nesilden gelen 401/403 hiçbir şey silmez.
+  - Nihai 401 (yenileme de başarısız olduysa ya da yenilenen token'la istek yine 401 aldıysa): yerel okumalar kapanır, ayna diskte kalır; aynı kimlikle (`kullanıcı:şirket`) yeniden girince açılır. Farklı kullanıcı ya da şirketle girişte mühürlü iş dahil her şey silinir.
+  - 403 `COMPANY_FORBIDDEN`: yalnız isteğin şirketi yerel kimliğin (`kullanıcı:şirket`) şirketiyle eşleşiyorsa o şirketin aynası silinir ve bekleyen iş mühürlenir. Mühür aynı kimlikle doğrulanınca kalkar; farklı kullanıcı ya da şirketle girişte mühürlü iş dahil her şey silinir.
+  - Güncel nesil 403 `USER_DEACTIVATED`: ayna silinir; outbox ve çatışmalar silinmez, mühürlenir (okunamaz ve gönderilemez). O nesle ait token'lar da temizlenir. Aynı kimlikle (`kullanıcı:şirket`) yeniden girip kimlik doğrulanınca mühür kalkar; farklı kullanıcı ya da şirketle girişte mühürlü iş dahil her şey silinir.
 ## Saklama ve limitler
 
 | Değer | Süre / sınır |
