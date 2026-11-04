@@ -108,6 +108,7 @@
   "reopen": "Mutabakatı yeniden aç",
   "journal": "Muhasebe fişi",
   "preview": "Önizleme",
+  "previewOnline": "Kayıt önizlemesi sunucuda hesaplanır; bağlantı gelince görünür.",
   "allocations": "Fatura eşleştirmeleri",
   "sales": "Satış faturaları",
   "purchasing": "Alış faturaları",

@@ -121,6 +121,11 @@ function realKeys(): Record<string, QueryKey[]> {
       invKeysFor(C).itemStock('i1'),
       salesDocsKeys.lots('i1', 'w1'),
     ],
+    'treasury-payments': [
+      treasuryKey(C, 'payments', 'list', { q: '', page: 1, per_page: 25 }),
+      treasuryKey(C, 'payments', 'p1'),
+      treasuryKey(C, 'payment-preview', 'p1', 1),
+    ],
     'treasury-reports.receivables-ageing': [treasuryKey(C, 'reports', 'receivables-ageing', {}, 1)],
     'treasury-reports.payables-ageing': [treasuryKey(C, 'reports', 'payables-ageing', {}, 1)],
   }

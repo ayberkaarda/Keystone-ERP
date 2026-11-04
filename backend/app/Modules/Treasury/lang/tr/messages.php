@@ -23,4 +23,5 @@ return [
     'module_invalid' => 'Sat?? veya sat?n alma cari hesab?n? se?in.',
     'same_account' => 'Farkl? bir hedef hesap se?in.',
     'payment_invalid' => 'Kaydedilmi? ?deme bu planla uyu?muyor.',
+    'document_locked' => 'Yalnızca taslak ödeme düzenlenebilir veya silinebilir.',
 ];

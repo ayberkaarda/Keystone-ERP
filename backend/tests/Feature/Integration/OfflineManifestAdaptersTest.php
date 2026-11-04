@@ -12,6 +12,8 @@ use App\Modules\Sales\Enums\OrderStatus;
 use App\Modules\Sales\Enums\QuoteStatus;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesQuote;
+use App\Modules\Treasury\Enums\DocumentStatus as TreasuryDocumentStatus;
+use App\Modules\Treasury\Models\TreasuryPayment;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -126,6 +128,7 @@ it('locks exactly the statuses the manifest draft_only leaves editable', functio
     'sales orders' => ['sales-orders', SalesOrder::class, OrderStatus::class],
     'purchase requests' => ['purchase-requests', PurchaseRequest::class, RequestStatus::class],
     'stock documents' => ['stock-documents', StockDocument::class, StockDocumentStatus::class],
+    'treasury payments' => ['treasury-payments', TreasuryPayment::class, TreasuryDocumentStatus::class],
 ]);
 
 it('declares draft_only for every writable resource except the create-only parties', function (): void {

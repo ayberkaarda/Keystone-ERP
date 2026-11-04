@@ -108,6 +108,7 @@
   "reopen": "Reopen reconciliation",
   "journal": "Journal entry",
   "preview": "Preview",
+  "previewOnline": "The posting preview is calculated on the server and appears once you are online.",
   "allocations": "Invoice allocations",
   "sales": "Sales invoices",
   "purchasing": "Supplier invoices",

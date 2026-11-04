@@ -290,6 +290,45 @@
             "discard"
           ]
         }
+      },
+      {
+        "idempotency_key": "0193b1f0-1111-7aaa-8bbb-00000000000c",
+        "resource": "treasury-payments",
+        "id": "0193b1ea-3300-7f50-a555-9c0d1e2f3a80",
+        "status": "applied",
+        "replayed": false,
+        "version": 1,
+        "data": {
+          "id": "0193b1ea-3300-7f50-a555-9c0d1e2f3a80",
+          "company_id": "0193a000-0000-7000-8000-000000000001",
+          "number": null,
+          "document_date": "2026-10-25",
+          "status": "draft",
+          "description": "Kırtasiye masrafı",
+          "journal_entry_id": null,
+          "reversal_journal_entry_id": null,
+          "reversal_date": null,
+          "reversal_reason": null,
+          "created_by": "01937a2c-5b10-7c11-8d42-2a9e7f3c5b02",
+          "version": 1,
+          "created_at": "2026-10-25T18:20:03+03:00",
+          "updated_at": "2026-10-25T18:20:03+03:00",
+          "direction": "payment",
+          "account_id": "0193a000-0000-7000-8000-0000000000e1",
+          "party_id": "0193b1e4-2a7c-7d55-b8e9-3f4a5b6c7d10",
+          "currency_code": "TRY",
+          "amount": "250.0000",
+          "fx_rate": "1.000000",
+          "reference": "KASA-118",
+          "amount_local": "0.0000",
+          "allocated_local": "0.0000",
+          "advance_local": "0.0000",
+          "realized_fx": "0.0000",
+          "approval_request_id": null,
+          "counterparty_module": "purchasing",
+          "allocations": [],
+          "allocations_redacted": false
+        }
       }
     ]
   },

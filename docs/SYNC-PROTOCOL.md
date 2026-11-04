@@ -79,7 +79,7 @@ Her manifest kaynağı bir şirket kapsamı bildirir. Kapsam, modelin backend'de
 
 | `scope` | Kaynaklar | Satır kümesi |
 |---|---|---|
-| `company` | Varsayılan; Parties, Catalog, Inventory, Sales, Purchasing ve Reference'ın şirkete ait tabloları | `company_id = :company` |
+| `company` | Varsayılan; Parties, Catalog, Inventory, Sales, Purchasing, Treasury ve Reference'ın şirkete ait tabloları | `company_id = :company` |
 | `company_or_global` | `exchange-rates`, `tax-codes` | `company_id IS NULL OR company_id = :company`. `NULL` satırlar sistem satırıdır (TCMB kurları, resmî vergi kodları); `ExchangeRate` ve `TaxCode` global scope'larıyla aynıdır. |
 | `global_with_company_activation` | `currencies` | Tüm `currencies` satırları; şirkete özel durum `company_currencies` (`activation.key = currency_code`). |
 
@@ -249,6 +249,7 @@ Bilinen türetmeler (backend kaynağı manifestte `source` olarak):
 | `purchase-requests` | `lines` | `estimated_total` (`Purchasing/Services/RequestService.php:379`) |
 | | her update | `currency_code`: her yazmada şirketin ana para birimi (`RequestService.php:345`) |
 | `stock-documents` | — | Yok; sayım satırları yalnızca `counts` işlemiyle (`exact`) yazılır, `doc_type` ve sayım deposu değiştirilemez (`Inventory/Services/StockDocuments.php:70-77`). |
+| `treasury-payments` | her update | `currency_code` (her yazmada hesabın para birimi) ve `fx_rate` (`TreasurySettings::rate` ile yeniden doğrulanır, ana para biriminde `1.000000`; `Treasury/Services/PaymentService.php:76-77`). `allocations` bütün olarak yazılır ve ödemenin activitylog'unda yoktur: eski `base_version` ile gelen `allocations` her zaman çakışmadır. |
 
 Not: `RequestService::update` satırları her update'te silip yeniden yazar; satır `id`'leri bu yüzden değişir. İstemci satırları kimlikle değil, dönen `data.lines` ile bütün olarak değiştirir.
 - `create` ve `delete`: `changed_fields` boştur; `delete` payload'ı boş nesnedir (şema denetler).
@@ -368,7 +369,7 @@ Numara verme sunucudadır. Çevrimdışı oluşturulan taslak numarasızdır; nu
 
 ## Çevrimdışı liste sorguları
 
-Masaüstü bir liste isteğini (`GET <path>?page&per_page&sort&filter[...]&q`) yerel kopyadan yanıtlarken yalnız kaynağın `query` bölümünde bildirilen adları uygular (`offline-manifest.json`, `manifest_version` 3). Bölüm isteğe bağlıdır ve `pull` kaynaklarında ve alt akışlarda (`children`) bulunur; `snapshot` kaynaklarında yoktur (şema reddeder). Bölüm sunucunun pull/push davranışını değiştirmez; yine de manifest içeriği değiştiği için sürüm 3'e çıktı. Sürüm 2 manifesti derlenmiş bir masaüstü, sunucu 3'ü bildirdiğinde `manifest_mismatch` ile çevrimdışı yazmayı kapatır; masaüstü sözleşme dosyalarını aldığında kalkar. Eski manifestte `query` olmaması geçerlidir.
+Masaüstü bir liste isteğini (`GET <path>?page&per_page&sort&filter[...]&q`) yerel kopyadan yanıtlarken yalnız kaynağın `query` bölümünde bildirilen adları uygular (`offline-manifest.json`, `manifest_version` 4). Bölüm isteğe bağlıdır ve `pull` kaynaklarında ve alt akışlarda (`children`) bulunur; `snapshot` kaynaklarında yoktur (şema reddeder). Bölüm sunucunun pull/push davranışını değiştirmez; yine de manifest içeriği değiştiği için sürüm 3'e çıktı. Sürüm 2 manifesti derlenmiş bir masaüstü, sunucu 3'ü bildirdiğinde `manifest_mismatch` ile çevrimdışı yazmayı kapatır; masaüstü sözleşme dosyalarını aldığında kalkar. Eski manifestte `query` olmaması geçerlidir. Sürüm 4 `treasury-payments` kaynağını (çevrimdışı ödeme taslakları, Çevrimdışı yazma kapsamı) ekledi; `query` kuralları değişmedi, 3 ve 4 aynı biçimde okunur.
 
 | Alan | Anlamı |
 |---|---|
@@ -444,8 +445,19 @@ Masaüstünün kendi verdiği her yanıt (veri ya da ret) `meta.offline` taşır
 | `sales-orders` | create, update, delete | Hedef `status = draft`. |
 | `purchase-requests` | create, update, delete | Hedef `status` `draft` veya `rejected`. |
 | `stock-documents` | create, update, delete, action `counts` (`exact`) | Payload ve hedef `doc_type = count`; hedef `status = draft`. |
+| `treasury-payments` | create (`none`), update (`field-merge`), delete (`exact`) | Hedef `status = draft`; işlem yok (onaya gönderme, kaydetme, ters kayıt ve iptal çevrimiçi). |
 
 `purchase-requests` için reddedilmiş talep de taslak gibi düzenlenir ve silinir; bu, web'deki "revize et" akışıyla aynı kuraldır (`RequestService::update`/`delete`, `PurchaseRequestSyncWriter::isDraft`). `rejected` bir talebin update'i talebi yeniden `draft` durumuna alır. Diğer durumlarda sonuç `conflict` / `DOCUMENT_LOCKED`'dır. Manifest bunu `draft_only: {field: status, value: draft, also: [rejected]}` ile bildirir (`contracts/offline-manifest.json:383`); `also`, `value` dışında düzenlenebilir sayılan değerlerin listesidir (şemada isteğe bağlı, en az bir öğe; `offline-manifest.schema.json:154`). Diğer kaynaklar `also` taşımaz. Bu alan istemci sözleşmesidir: istemci `also` değerlerindeki belgeyi kilitli göstermemelidir. Sunucu `also`'yu okumaz; kararı yazarın `isDraft` sonucuyla verir (`Sync/Services/PushService.php:272`, `PurchaseRequestSyncWriter.php:59-64`). Alan, `document_date` → `lines` ve `currency_code` türetmeleriyle birlikte `manifest_version` 2'de eklendi (`offline-manifest.json:3`).
+
+`treasury-payments` (tahsilat ve ödeme belgesi, web `/treasury/payments`) için çevrimdışı yazma yalnız taslaktır; ürün kararı satış teklif ve siparişleriyle aynıdır:
+
+- **İzin.** Her işlem REST ucunun izniyle, etkin şirkette: create `treasury.payments.create`, update `treasury.payments.update`, delete `treasury.payments.delete`, okuma `treasury.payments.view`. Push önce manifest iznine, sonra `TreasuryPaymentPolicy`'ye (aynı izinler, aynı şirket), en son REST'in kendi `treasury-access` denetimine bakar. Dağıtımlar (`allocations`) yazılırken eski ve yeni dağıtımların modülü için `sales.invoices.view` / `purchasing.invoices.view` de gerekir (`TreasuryCoreController::sources`); yoksa `FORBIDDEN`.
+- **Yazma zinciri.** `PaymentSyncWriter` uçların kendisini çalıştırır: eşleşen route ile kurulan istek `TreasuryCoreController::store`, `update` ve `destroy`'a verilir. Kurallar (bilinmeyen anahtar reddi, tutar biçimi ve `> 0`, kur, para biriminin hesabınkiyle aynı olması, aktif hesap ve cari, dağıtım faturası) ve `PaymentService::save` / `delete` REST ile birebir aynıdır. Create'te istemci `id`'si `ClientKey` ile REST'te de kabul edilir.
+- **Numara ve para hareketi yok.** Numara yalnız kaydetmede (`PaymentService::post`) verilir. Push'ta `number`, `status` ve kaydetmenin, onayın ve ters kaydın yazdığı alanlar (`journal_entry_id`, `amount_local`, `allocated_local`, `advance_local`, `realized_fx`, `approval_request_id`, `reversal_*`, `created_by`) `rejected` / `SYNC_OFFLINE_WRITE_NOT_ALLOWED` alır. Taslağın kaydı ve silinmesi `treasury_movements`'a, yevmiyeye ve fatura bakiyesine dokunmaz; `action` mutasyonu manifestte yoktur ve reddedilir.
+- **Kilit.** Taslak dışındaki her durum (`pending_approval`, `approved`, `posted`, `reversed`, `cancelled`) push'ta `conflict` / `DOCUMENT_LOCKED` (güncel `server_data` ile), REST düzenleme ve silmede 409 `DOCUMENT_LOCKED` alır (`PaymentService::assertDraft`, sürüm kontrolünden önce).
+- **Satır.** Pull satırı ve push `data`'sı REST detayıdır (`PaymentResource`): kolonlar, gömülü `allocations` ve `allocations_redacted`. Kullanıcının fatura izni olmayan modülün dağıtımları satırda yoktur ve `allocations_redacted = true` olur. `treasury_allocations` üst satıra dokunur (`syncable(parent: 'treasury_payments')`, migration `2027_08_01_200700`); yalnız dağıtımları değiştiren bir kayıt da sürümü artırır.
+- **İdempotency ve çakışma.** Diğer taslaklarla aynı: saklanan sonucun tekrarı, `field-merge` update, `exact` delete.
+- **Çevrimiçi kalanlar.** Onaya gönderme, kaydetme, ters kayıt ve iptal `treasuryPayment` online_only işlemidir; muhasebe önizlemesi (`GET /treasury-payments/{id}/preview`) `serverCalculation` işlemidir.
 
 ## ONLINE_ONLY
 
@@ -537,7 +549,7 @@ D1 sonrası durum. Kontrol `backend/` kaynak kodu (main) üzerinde yapıldı. Nu
 
 **Senkron altyapısı (A6)**
 
-1. **Kapandı.** `syncable()` Blueprint makrosu `backend/app/Core/Sync/Schema/Syncable.php`'dedir: `sync_txid xid8` kolonu, `(company_id, sync_txid, id)` index'i (şirket kolonu yoksa `(sync_txid, id)`) ve `zz_sync_touch` trigger'ı. Trigger fonksiyonları `backend/database/migrations/2027_08_01_100000_create_sync_functions.php`'dedir. Modül tabloları `Modules/<Ad>/Database/migrations/2027_08_01_200N00_add_sync_to_<modül>.php` migration'larıyla bağlanır: Parties `200100`, Catalog `200200`, Reference `200300`, Sales `200400`, Purchasing `200500`, Inventory `200600`.
+1. **Kapandı.** `syncable()` Blueprint makrosu `backend/app/Core/Sync/Schema/Syncable.php`'dedir: `sync_txid xid8` kolonu, `(company_id, sync_txid, id)` index'i (şirket kolonu yoksa `(sync_txid, id)`) ve `zz_sync_touch` trigger'ı. Trigger fonksiyonları `backend/database/migrations/2027_08_01_100000_create_sync_functions.php`'dedir. Modül tabloları `Modules/<Ad>/Database/migrations/2027_08_01_200N00_add_sync_to_<modül>.php` migration'larıyla bağlanır: Parties `200100`, Catalog `200200`, Reference `200300`, Sales `200400`, Purchasing `200500`, Inventory `200600`, Treasury `200700`.
 2. **Kapandı.** `sync_tombstones` tablosu `2027_08_01_100100` migration'ındadır. `sync_tombstone()` trigger'ı silmede `deleted`, `deleted_at` dolduğunda `soft_deleted` nedeniyle `(resource_table, row_id)` başına upsert yapar; restore'da tombstone'u siler.
 3. **Kapandı.** Sözleşme `backend/app/Core/Sync/`, sunucu `backend/app/Modules/Sync/`'tedir. `GET /sync/manifest`, `POST /sync/pull`, `POST /sync/push` uçları `Modules/Sync/routes.php`'de `auth:sanctum`, `EnsureDesktopToken`, `password.changed` ve `company` middleware'lerinin arkasındadır.
 4. **Kapandı.** Alt tablolar `syncable(parent: ..., parentKey: [...])` ile bağlanır. Deyim düzeyindeki `sync_touch_parent()` trigger'ları alt satır yazmasında üst satırın `sync_txid`'ini yeniler (ör. `party_addresses`/`party_contacts`/`party_bank_accounts` → `parties`, belge satırları → belge başlığı). Kesinleşmiş üst satırı koruyan guard'lar bu dokunuşu yalnız `Syncable::GUARD_EXEMPTION` ile, yani `sync_txid` dışında hiçbir kolon değişmediğinde geçirir (`Core/Sync/Schema/Syncable.php:53`, `sync_touch_only()`: `database/migrations/2027_08_01_100300_create_sync_touch_only_function.php`); ayrıntı [Mimari](ARCHITECTURE.md#satır-guardlarında-senkron-istisnası). Satıra gömülü ama tablo yazması olmayan türetilmiş değerler için bkz. Bilinen sınırlamalar.
@@ -547,7 +559,7 @@ D1 sonrası durum. Kontrol `backend/` kaynak kodu (main) üzerinde yapıldı. Nu
 
 **Push zinciri**
 
-8. **Kapandı.** Store FormRequest'leri istemci `id`'sini `App\Core\Sync\Rules\ClientKey` ile kabul eder (UUIDv7 + tabloda kullanılmamış, tek tip hata mesajı): `PartyRequest`, Sales ve Purchasing `DocumentRequest`, `StockDocumentRequest`. Kural Mutasyon bölümündedir.
+8. **Kapandı.** Store FormRequest'leri istemci `id`'sini `App\Core\Sync\Rules\ClientKey` ile kabul eder (UUIDv7 + tabloda kullanılmamış, tek tip hata mesajı): `PartyRequest`, Sales ve Purchasing `DocumentRequest`, `StockDocumentRequest`, ödemelerde `TreasuryCoreController::validateData`. Kural Mutasyon bölümündedir.
 9. **Kapandı.** Push sonuçları `sync.push` kapsamında (`SyncConfig::PUSH_IDEMPOTENCY_SCOPE`) istek özeti ve sonucun tamamıyla 7 gün saklanır (`config/sync.php` `idempotency_retention_days`). REST `Idempotency-Key` katmanı değişmedi (24 saat, `config/idempotency.php`).
 10. **Kapandı.** Sales ve Purchasing `DocumentService::assertEditable` ile Inventory `Support/Messages.php`, taslak olmayan belgede 409 `DOCUMENT_LOCKED` atar. Önerilen 11 kod `ErrorCode`'dadır. Açık: web arayüzünün 422 yerine 409'u işlemesi (frontend MSW handler'ları ve hata işleme).
 11. **Kapandı (push).** `PartySyncWriter` create öncesinde `DuplicateFinder`'ı çalıştırır (Çakışma kuralları 5). REST `POST /api/v1/parties` mükerrer kontrolü yapmaz; web arayüzü `GET /api/v1/parties/duplicates`'i kullanır.
@@ -566,7 +578,7 @@ D1 sonrası durum. Kontrol `backend/` kaynak kodu (main) üzerinde yapıldı. Nu
 
 **Kapsam**
 
-15. **Açık.** B3'teki çevrimdışı yazma türlerinden masraf beyanı, izin talebi, puantaj/zaman çizelgesi (İK, Faz 11) ile not ve aktivite için backend'de modül veya uç yok; manifestte yer almıyorlar.
+15. **Kısmen.** Kasa ve banka ödeme (masraf) taslağı `treasury-payments` ile çevrimdışıdır (Çevrimdışı yazma kapsamı). B3'teki diğer çevrimdışı yazma türlerinden personel masraf beyanı, izin talebi, puantaj/zaman çizelgesi (İK, Faz 11) ile not ve aktivite için backend'de modül veya uç yok; manifestte yer almıyorlar.
 16. **Açık.** ONLINE_ONLY listesindeki bordro ve MRP çalıştırma uçları yok (Faz 10 ve 11); eklenince manifeste girecek.
 17. **Açık.** Cari bakiyesi için ayrı liste ucu yok. Anlık görüntü `treasury-reports/receivables-ageing` ve `payables-ageing` raporlarından alınıyor; `customers/{id}/exposure` cari başına ve çevrimiçi.
 18. **Açık.** Depolar iki uçtan okunuyor: `warehouses` (Reference, ana veri) ve `stock-warehouses` (Inventory ayarları). Manifest ana veri olarak `warehouses`'ı kullanıyor.

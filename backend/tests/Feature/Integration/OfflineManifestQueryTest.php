@@ -17,6 +17,7 @@ use Tests\Support\Inventory\Inv;
 use Tests\Support\PlannerStatistics;
 use Tests\Support\Purchasing\PurchKit;
 use Tests\Support\Sales\SalesKit;
+use Tests\Support\Treasury\TreasuryRows;
 
 /*
  * The `query` sections of contracts/offline-manifest.json: the sort and filter fields the desktop
@@ -191,6 +192,10 @@ function oqWorld(): object
         'lines' => [['invoice_line_id' => $invoice['lines'][0]['id'], 'quantity' => '1']],
     ])->assertCreated();
     PurchKit::receive($p, $order['id'], [$order['lines'][0]['id'] => '1'], '2027-06-14');
+    TreasuryRows::seed($p, [
+        ['payment', '2027-06-03', '9.5', 'Çay masrafı', false], ['receipt', '2027-06-04', '1000.25', null, true],
+        ['payment', '2027-06-05', '100', 'İzmir kargo', false], ['receipt', '2027-06-05', '0.5', 'ırmak', true],
+    ]);
 
     $w = SalesKit::world();
     $company = $w->company;
@@ -251,10 +256,10 @@ function oqWorld(): object
     ];
 }
 
-/** The company whose rows a resource is checked against. */
+/** The company whose rows a resource is checked against (purchasing and treasury: the purchasing chart). */
 function oqCtx(object $world, string $resource): object
 {
-    return str_starts_with($resource, 'purchase-') ? $world->purchasing : $world->sales;
+    return str_starts_with($resource, 'purchase-') || str_starts_with($resource, 'treasury-') ? $world->purchasing : $world->sales;
 }
 
 function oqPath(object $world, string $path): string

@@ -51,7 +51,10 @@ const CALL_SITES: Record<string, Record<string, number>> = {
     '/src/features/accounting/periods/pages/PeriodsBoardPage.tsx': 1,
     '/src/features/accounting/fiscal/pages/FiscalYearsPage.tsx': 2,
   },
-  serverCalculation: { '/src/features/catalog/pages/PricingPlaygroundPage.tsx': 1 },
+  serverCalculation: {
+    '/src/features/catalog/pages/PricingPlaygroundPage.tsx': 1,
+    '/src/features/treasury/shared/RecordPage.tsx': 1,
+  },
   liveReports: {
     '/src/features/accounting/reports/pages/TrialBalancePage.tsx': 1,
     '/src/features/accounting/reports/pages/GeneralLedgerPage.tsx': 1,

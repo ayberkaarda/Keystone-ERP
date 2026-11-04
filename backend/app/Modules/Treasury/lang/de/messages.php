@@ -23,4 +23,5 @@ return [
     'module_invalid' => 'W?hlen Sie das Debitoren- oder Kreditorenkonto.',
     'same_account' => 'W?hlen Sie ein anderes Zielkonto.',
     'payment_invalid' => 'Die gebuchte Zahlung passt nicht zu diesem Plan.',
+    'document_locked' => 'Nur eine Zahlung im Entwurf kann bearbeitet oder gelöscht werden.',
 ];

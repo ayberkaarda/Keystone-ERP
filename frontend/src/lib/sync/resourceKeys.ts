@@ -66,6 +66,10 @@ export const RESOURCE_KEY_ROOTS: Readonly<Record<string, ResourceKeyRoots>> = {
     ['inventory', c, 'stock-views', 'balances'],
     sales(c, 'deliveries', 'lots'),
   ],
+  'treasury-payments': (c) => [
+    ['treasury', c, 'payments'],
+    ['treasury', c, 'payment-preview'],
+  ],
   'treasury-reports.receivables-ageing': (c) => [['treasury', c, 'reports', 'receivables-ageing']],
   'treasury-reports.payables-ageing': (c) => [['treasury', c, 'reports', 'payables-ageing']],
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Treasury\Services;
 
+use App\Core\Http\ApiException;
+use App\Core\Http\ErrorCode;
 use App\Core\Numbering\NumberSequenceService;
 use App\Modules\Accounting\Contracts\AccountDeterminer;
 use App\Modules\Accounting\Contracts\PostingService;
@@ -50,10 +52,14 @@ final class PaymentService implements TreasuryPaymentLookup
         return DB::transaction(function () use ($payment, $input, $version, $actor): TreasuryPayment {
             if ($payment !== null) {
                 $payment = $this->lock($payment->id);
+                $this->assertDraft($payment);
                 $payment->assertVersion($version ?? 0);
-                $this->status($payment, [DocumentStatus::Draft->value]);
             } else {
                 $payment = new TreasuryPayment;
+                if (isset($input['id']) && is_string($input['id'])) {
+                    // Client key of an offline draft, checked by ClientKey in the request.
+                    $payment->setAttribute('id', $input['id']);
+                }
             }
             $merged = [...$payment->getAttributes(), ...$input];
             $account = app(AccountService::class)->account((string) $merged['account_id']);
@@ -72,6 +78,11 @@ final class PaymentService implements TreasuryPaymentLookup
             $allocations = $input['allocations'] ?? null;
             unset($merged['allocations'],$merged['version'],$merged['id'],$merged['company_id'],$merged['created_at'],$merged['updated_at']);
             $payment->fill($merged);
+            if ($allocations !== null && $payment->exists) {
+                // Replacing the allocations is an edit of the payment: the version moves, so a
+                // stale writer (REST or an offline draft) conflicts instead of overwriting them.
+                $payment->bumpVersion();
+            }
             if (! $payment->exists) {
                 $payment->setAttribute('status', DocumentStatus::Draft->value);
                 $payment->setAttribute('created_by', $actor);
@@ -282,8 +293,8 @@ final class PaymentService implements TreasuryPaymentLookup
     {
         DB::transaction(function () use ($id, $version): void {
             $p = $this->lock($id);
+            $this->assertDraft($p);
             $p->assertVersion($version);
-            $this->status($p, [DocumentStatus::Draft->value]);
             DB::table('treasury_allocations')->where('payment_id', $p->id)->where('company_id', $p->company_id)->delete();
             $p->delete();
         });
@@ -307,6 +318,18 @@ final class PaymentService implements TreasuryPaymentLookup
     private function lock(string $id): TreasuryPayment
     {
         return TreasuryPayment::query()->whereKey($id)->lockForUpdate()->firstOrFail();
+    }
+
+    /**
+     * Edits and deletes are for drafts only; any other status is locked (409 DOCUMENT_LOCKED,
+     * REST and offline sync alike), checked before the version so a stale edit of a posted
+     * payment is told it is locked, not merely stale.
+     */
+    private function assertDraft(TreasuryPayment $p): void
+    {
+        if ($p->getAttribute('status') !== DocumentStatus::Draft->value) {
+            throw new ApiException(ErrorCode::DocumentLocked, (string) __('treasury::messages.document_locked'));
+        }
     }
 
     /** @param list<string> $statuses */

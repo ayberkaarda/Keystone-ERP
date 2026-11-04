@@ -15,6 +15,7 @@ use Tests\Support\Catalog\Catalog;
 use Tests\Support\PlannerStatistics;
 use Tests\Support\Purchasing\PurchKit;
 use Tests\Support\Sales\SalesKit;
+use Tests\Support\Treasury\TreasuryRows;
 
 /*
  * The offline-manifest `query` sections against the server with data that tells the rules apart:
@@ -251,6 +252,12 @@ function oqpWorld(): object
         ])->assertCreated();
     }
 
+    TreasuryRows::seed($p, [
+        ['payment', '2027-06-02', '9.5', 'Çay talebi', false], ['receipt', '2027-06-02', '100', 'cam', true],
+        ['payment', '2027-06-03', '1000.25', 'İzmir', false], ['receipt', '2027-06-05', '0.5', 'ırmak', true],
+        ['payment', '2027-06-01', '240', 'Zeytin Lq7x', false], ['receipt', '2027-06-04', '20', null, false],
+    ], oqpTick(...));
+
     $w = SalesKit::world();
     $company = $w->company;
     $user = Actors::user(array_values(array_unique([...$permissions, ...SalesKit::ALL])));
@@ -360,7 +367,7 @@ function oqpStreams(object $world): array
             continue;
         }
 
-        $ctx = str_starts_with($name, 'purchase-') ? $world->purchasing : $world->sales;
+        $ctx = str_starts_with($name, 'purchase-') || str_starts_with($name, 'treasury-') ? $world->purchasing : $world->sales;
         $path = str_replace(['{warehouse}', '{item}'], [$world->warehouse, $world->item], substr($resource['path'], strlen('/api/v1/')));
         $rows = SalesKit::get($ctx->user, $ctx->company, $path.'?per_page=100')->assertOk()->json('data');
 

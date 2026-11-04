@@ -171,7 +171,7 @@ it('waits for workflow approval and prevents editing approved allocation payload
     P::post($w->user, $w->company, 'treasury-payments/'.$p['id'].'/post', ['version' => $p['version']])->assertStatus(422);
     $p = P::post($w->user, $w->company, 'treasury-payments/'.$p['id'].'/submit', ['version' => $p['version']])->assertOk()->assertJsonPath('data.status', 'pending_approval')->json('data');
     P::post($w->user, $w->company, 'treasury-payments/'.$p['id'].'/post', ['version' => $p['version']])->assertStatus(422);
-    P::patch($w->user, $w->company, 'treasury-payments/'.$p['id'], ['version' => $p['version'], 'amount' => '1'])->assertStatus(422);
+    P::patch($w->user, $w->company, 'treasury-payments/'.$p['id'], ['version' => $p['version'], 'amount' => '1'])->assertStatus(409)->assertJsonPath('errors.code', 'DOCUMENT_LOCKED');
     $a = P::get($approver, $w->company, 'approvals/'.$p['approval_request_id'])->assertOk()->json('data');
     P::post($approver, $w->company, 'approvals/'.$p['approval_request_id'].'/decisions', ['version' => $a['version'], 'step' => $a['current_step'], 'decision' => 'approve'])->assertOk();
     $p = P::get($w->user, $w->company, 'treasury-payments/'.$p['id'])->assertOk()->assertJsonPath('data.status', 'approved')->json('data');

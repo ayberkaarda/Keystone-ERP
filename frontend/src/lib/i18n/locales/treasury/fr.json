@@ -108,6 +108,7 @@
   "reopen": "Rouvrir le rapprochement",
   "journal": "Écriture comptable",
   "preview": "Aperçu",
+  "previewOnline": "L’aperçu de comptabilisation est calculé sur le serveur et s’affiche une fois en ligne.",
   "allocations": "Affectations aux factures",
   "sales": "Factures clients",
   "purchasing": "Factures fournisseurs",

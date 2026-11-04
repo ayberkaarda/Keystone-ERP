@@ -23,4 +23,5 @@ return [
     'module_invalid' => 'Choisissez le compte client ou fournisseur.',
     'same_account' => 'Choisissez un autre compte destinataire.',
     'payment_invalid' => 'Le r?glement comptabilis? ne correspond pas ? cette ?ch?ance.',
+    'document_locked' => 'Seul un paiement en brouillon peut être modifié ou supprimé.',
 ];

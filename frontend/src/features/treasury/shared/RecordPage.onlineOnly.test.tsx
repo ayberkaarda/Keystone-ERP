@@ -1,6 +1,8 @@
 import { screen } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import type { AppExtensions } from '@/app/extensions'
 import { TREAS_INSTRUMENT, TREAS_PAYMENT, TREAS_STATEMENT } from '@/test/handlers/treasury'
+import { server } from '@/test/msw/server'
 import { renderTreasury, setupTreasury } from './testing'
 
 // A runtime with an offline mode disables server-only actions through the online-only extension.
@@ -71,5 +73,49 @@ describe('treasury record online-only actions', () => {
     renderTreasury(`/treasury/payments/${TREAS_PAYMENT}`)
     const post = await screen.findByRole('button', { name: 'Kaydet / işle' })
     expect(post).not.toHaveAttribute('aria-disabled')
+    expect((await screen.findAllByText('100.00')).length).toBeGreaterThan(0)
+  })
+
+  // Offline a payment draft is still edited and deleted (offline-manifest treasury-payments);
+  // the posting preview is a server calculation and is not asked for.
+  it('keeps draft edits available and skips the server preview while offline', async () => {
+    const asked = vi.fn((action: string) =>
+      ['treasuryPayment', 'serverCalculation'].includes(action)
+        ? { disabled: true, reason: 'Bu işlem için bağlantı gerekir.' }
+        : { disabled: false },
+    )
+    ext.value = { routes: [], publicRoutes: [], useOnlineOnly: asked }
+    setupTreasury()
+    const previews = vi.fn()
+    server.use(
+      http.get('*/api/v1/treasury-payments/:id/preview', () => {
+        previews()
+        return HttpResponse.json({ data: {} })
+      }),
+    )
+    renderTreasury(`/treasury/payments/${TREAS_PAYMENT}`)
+    expect(await screen.findByRole('button', { name: 'Düzenle' })).not.toHaveAttribute(
+      'aria-disabled',
+    )
+    expect(screen.getByRole('button', { name: 'Sil' })).not.toHaveAttribute('aria-disabled')
+    expect(screen.getByRole('button', { name: 'Kaydet / işle' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+    expect(
+      screen.getByText('Kayıt önizlemesi sunucuda hesaplanır; bağlantı gelince görünür.'),
+    ).toBeInTheDocument()
+    expect(asked).toHaveBeenCalledWith('serverCalculation')
+    expect(previews).not.toHaveBeenCalled()
+  })
+
+  it('treats a payment drafted on this device, not yet sent, as a draft', async () => {
+    const db = setupTreasury()
+    const [payment] = db.records.payments
+    if (payment) delete payment.status
+    renderTreasury(`/treasury/payments/${TREAS_PAYMENT}`)
+    expect(await screen.findByRole('button', { name: 'Düzenle' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sil' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Kaydet / işle' })).not.toBeInTheDocument()
   })
 })

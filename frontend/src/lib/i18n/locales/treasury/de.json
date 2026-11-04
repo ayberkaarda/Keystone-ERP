@@ -108,6 +108,7 @@
   "reopen": "Abstimmung wieder öffnen",
   "journal": "Buchungssatz",
   "preview": "Vorschau",
+  "previewOnline": "Die Buchungsvorschau wird auf dem Server berechnet und erscheint, sobald Sie online sind.",
   "allocations": "Rechnungszuordnungen",
   "sales": "Verkaufsrechnungen",
   "purchasing": "Lieferantenrechnungen",

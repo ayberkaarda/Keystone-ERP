@@ -586,6 +586,20 @@
       "query": "page=1&per_page=25&sort=number,-document_date&q=S1&filter[doc_type]=receipt&filter[status]=posted&filter[date_from]=2027-01-01&filter[date_to]=2027-12-31&filter[warehouse_id]=@uuid&filter[item_id]=@uuid",
       "expect": "local",
       "source": "frontend/src/features/inventory/documents/pages/StockDocumentListPage.tsx"
+    },
+    {
+      "resource": "treasury-payments",
+      "query": "q=&page=1&per_page=25",
+      "expect": "local",
+      "source": "frontend/src/features/treasury/shared/ListPage.tsx",
+      "evidence": "per_page: 25,"
+    },
+    {
+      "resource": "treasury-payments",
+      "query": "q=kargo&page=2&per_page=25&filter[status]=draft",
+      "expect": "local",
+      "source": "frontend/src/features/treasury/shared/ListPage.tsx",
+      "evidence": "'filter[status]'"
     }
   ],
   "other_endpoints": [
@@ -618,6 +632,11 @@
       "source": "frontend/src/features/sales/deliveries/api.ts",
       "filter": "warehouse_id",
       "endpoint": "/stock-balances"
+    },
+    {
+      "source": "frontend/src/features/treasury/shared/api.ts",
+      "filter": "is_active",
+      "endpoint": "accounts"
     }
   ]
 }

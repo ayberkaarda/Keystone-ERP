@@ -6,6 +6,8 @@ namespace App\Modules\Treasury;
 
 use App\Core\Company\CompanyContext;
 use App\Core\Modules\ModuleServiceProvider;
+use App\Core\Sync\Contracts\SyncResource;
+use App\Core\Sync\Contracts\SyncWriter;
 use App\Models\User;
 use App\Modules\Identity\Contracts\CompanyAuthorizer;
 use App\Modules\Settings\Contracts\SettingsRegistrar;
@@ -21,10 +23,13 @@ use App\Modules\Treasury\Models\TreasuryAccount;
 use App\Modules\Treasury\Models\TreasuryPayment;
 use App\Modules\Treasury\Models\TreasuryPaymentPlan;
 use App\Modules\Treasury\Models\TreasuryTransfer;
+use App\Modules\Treasury\Policies\TreasuryPaymentPolicy;
 use App\Modules\Treasury\Services\AccountService;
 use App\Modules\Treasury\Services\InvoiceBridge;
 use App\Modules\Treasury\Services\PaymentService;
 use App\Modules\Treasury\Services\UnmatchedPayments;
+use App\Modules\Treasury\Sync\PaymentSyncResource;
+use App\Modules\Treasury\Sync\PaymentSyncWriter;
 use App\Modules\Workflow\Events\ApprovalCompleted;
 use App\Modules\Workflow\Events\ApprovalRejected;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -43,6 +48,9 @@ final class TreasuryServiceProvider extends ModuleServiceProvider
         $this->app->bind(TreasuryPaymentLookup::class, PaymentService::class);
         $this->app->bind(TreasuryInvoiceAccess::class, InvoiceBridge::class);
         $this->app->bindIf(PaymentReversalGuard::class, UnmatchedPayments::class);
+        // Offline sync of draft payments (offline-manifest `treasury-payments`), collected by the Sync module by tag.
+        $this->app->tag([PaymentSyncResource::class], SyncResource::TAG);
+        $this->app->tag([PaymentSyncWriter::class], SyncWriter::TAG);
         foreach ([Banking\BankingServiceProvider::class, Instruments\InstrumentsServiceProvider::class, Reports\ReportsServiceProvider::class] as $provider) {
             if (class_exists($provider)) {
                 $this->app->register($provider);
@@ -73,6 +81,7 @@ final class TreasuryServiceProvider extends ModuleServiceProvider
 
             return $company !== null && app(CompanyAuthorizer::class)->allows($user, $permission, $company);
         });
+        Gate::policy(TreasuryPayment::class, TreasuryPaymentPolicy::class);
         Relation::morphMap(['treasury_payment' => TreasuryPayment::class, 'treasury_account' => TreasuryAccount::class, 'treasury_transfer' => TreasuryTransfer::class, 'treasury_payment_plan' => TreasuryPaymentPlan::class]);
         app(SettingsRegistrar::class)->register(new SettingDefinition('treasury.require_approval_over', SettingType::String, '', 'treasury', rules: ['nullable', 'regex:/^(\d{1,16}(\.\d{1,4})?)?$/']));
         Event::listen(ApprovalCompleted::class, static function (ApprovalCompleted $e): void {

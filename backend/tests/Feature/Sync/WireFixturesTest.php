@@ -8,6 +8,7 @@ use App\Modules\Parties\Models\Party;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesQuote;
+use App\Modules\Treasury\Models\TreasuryPayment;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -89,6 +90,8 @@ function fixtureRows(): array
         'push counted stock document' => ['push.response.mixed.json', ['data', 'results', 2, 'data'], 'stock-documents', StockDocument::class],
         'push conflicting request' => ['push.response.rejected-and-merged.json', ['data', 'results', 3, 'conflict', 'server_data'], 'purchase-requests', PurchaseRequest::class],
         'push merged order' => ['push.response.rejected-and-merged.json', ['data', 'results', 4, 'data'], 'sales-orders', SalesOrder::class],
+        'push applied payment draft' => ['push.response.mixed.json', ['data', 'results', 5, 'data'], 'treasury-payments', TreasuryPayment::class],
+        'push locked posted payment' => ['push.response.rejected-and-merged.json', ['data', 'results', 6, 'conflict', 'server_data'], 'treasury-payments', TreasuryPayment::class],
     ];
 }
 

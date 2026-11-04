@@ -60,7 +60,7 @@ Modül, adaptörlerini kendi servis sağlayıcısında container etiketleriyle k
 - `SyncWriter`: hedef satırı şirket kapsamında bulur, sürümünü ve taslak durumunu bildirir, mutasyonu modülün kendi REST zinciriyle (FormRequest, Policy, Service) uygular. Doğrulama ve yetki hataları istisna değil `rejected` sonucu olarak döner. Çevrimdışı hiç yazılamayan alanları (`lockedFields`) ve activitylog'un izlediği alanları (`auditFields`) bildirir.
 - İstek düzeyi kontroller, idempotency kaydı, mutasyon transaction'ı ve çakışma kararı (sürüm, `draft_only`, alan kümesi) Sync modülündedir. Senkron için ayrı iş kuralı yazılmaz.
 
-Bugün kayıtlı adaptörler: Parties (`PartySyncResource`, `PartySyncWriter`), Catalog ve Reference (yalnız okuma), Sales (`DocumentSyncResource`, `DraftSyncWriter`), Purchasing (`PurchasingSyncResource`, `PurchaseRequestSyncWriter`), Inventory (`StockDocumentSyncResource`, `StockDocumentSyncWriter`).
+Bugün kayıtlı adaptörler: Parties (`PartySyncResource`, `PartySyncWriter`), Catalog ve Reference (yalnız okuma), Sales (`DocumentSyncResource`, `DraftSyncWriter`), Purchasing (`PurchasingSyncResource`, `PurchaseRequestSyncWriter`), Inventory (`StockDocumentSyncResource`, `StockDocumentSyncWriter`), Treasury (`PaymentSyncResource`, `PaymentSyncWriter`; yalnız ödeme taslakları).
 
 ### Değişiklik izleme, tombstone ve horizon
 

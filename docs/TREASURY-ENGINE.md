@@ -73,7 +73,11 @@ Mutabakat, bütün satırlar eşleştirilmeden ve açılış bakiyesi + hareketl
 
 Okuma, oluşturma, düzenleme, kayıt, ters kayıt, ciro ve mutabakat izinleri ayrıdır. Bir ekrana girebilmek bütün para işlemlerini yapma yetkisi vermez. Kaynak fatura bilgileri gösterilirken kaynak modülün okuma izni de korunur.
 
-Oluşturma ve kesinleştirme istekleri `Idempotency-Key` kullanır. Yanıt kaybolduğunda aynı işlem yeniden denenirse ikinci para hareketi oluşmamalıdır. Form veya diyalog kapanıp yeniden açılsa da aynı yük için bekleyen anahtar korunur. Güncel olmayan sürümler HTTP 409 ile reddedilir.
+Oluşturma ve kesinleştirme istekleri `Idempotency-Key` kullanır. Yanıt kaybolduğunda aynı işlem yeniden denenirse ikinci para hareketi oluşmamalıdır. Form veya diyalog kapanıp yeniden açılsa da aynı yük için bekleyen anahtar korunur. Güncel olmayan sürümler HTTP 409 ile reddedilir. Taslak olmayan ödeme belgesinin düzenlenmesi veya silinmesi HTTP 409 `DOCUMENT_LOCKED` alır; yalnız dağıtımları değiştiren bir kayıt da belgenin sürümünü artırır.
+
+## Çevrimdışı taslak
+
+Masaüstü uygulaması ödeme belgesini çevrimdışıyken yalnız taslak olarak oluşturur, düzenler ve siler (`treasury-payments`, [Senkron protokolü](SYNC-PROTOCOL.md#çevrimdışı-yazma-kapsamı)). Senkron, REST ucunun kendisini aynı izinlerle çalıştırır; numara, onaya gönderme, kaydetme, ters kayıt ve iptal çevrimiçi kalır. Senkron itmesi para hareketi, muhasebe fişi veya fatura kapaması oluşturmaz; kaydedilmiş, onaylanmış veya iptal edilmiş belge çevrimdışı değiştirilemez.
 
 ## Raporlar ve doğrulama
 

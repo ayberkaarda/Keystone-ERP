@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { OnlineOnlyButton } from '@/lib/online-only'
+import { OnlineOnlyButton, useOnlineOnly } from '@/lib/online-only'
 import { partiesApi } from '@/features/parties'
 import { hasPermission, usePermissionContext } from '@/lib/permissions'
 import { AccountEditor } from '../accounts/AccountEditor'
@@ -102,7 +102,12 @@ function RecordContent({ area, id }: { area: Area; id: string | undefined }) {
     ctx,
     area === 'accounts' ? permission(area, 'manage') : permission(area, 'update'),
   )
-  const draft = record?.status === 'draft' || record?.status === 'scheduled' || area === 'accounts'
+  // A payment drafted offline has no status until the server takes it: it is still a draft.
+  const draft =
+    record?.status === 'draft' ||
+    record?.status === 'scheduled' ||
+    area === 'accounts' ||
+    (area === 'payments' && record !== undefined && record.status == null)
   const onSaved = (result: TreasuryRecord) => {
     client.setQueryData(treasuryKey(company, area, result.id), result)
     setEditing(false)
@@ -384,12 +389,23 @@ function AccountMovements({ account }: { account: Account }) {
 function PaymentPreview({ payment }: { payment: Payment }) {
   const t = useTreasuryT()
   const company = useTreasuryCompany()
+  // The posting preview is computed by the server; an offline runtime leaves it for later.
+  const server = useOnlineOnly('serverCalculation')
+  const open = ['draft', 'approved'].includes(payment.status ?? '')
   const preview = useQuery({
     queryKey: treasuryKey(company, 'payment-preview', payment.id, payment.version),
     queryFn: ({ signal }) => treasuryApi.previewPayment(payment.id, signal),
-    enabled: ['draft', 'approved'].includes(payment.status ?? ''),
+    enabled: open && !server.disabled,
   })
-  if (!['draft', 'approved'].includes(payment.status ?? '')) return null
+  if (!open) return null
+  if (server.disabled)
+    return (
+      <Panel title={t('preview')}>
+        <p role="status" className="text-sm text-muted-foreground">
+          {t('previewOnline')}
+        </p>
+      </Panel>
+    )
   return (
     <Panel title={t('preview')}>
       <ErrorNotice error={preview.error} />

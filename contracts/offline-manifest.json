@@ -1,6 +1,6 @@
 {
   "$schema": "./offline-manifest.schema.json",
-  "manifest_version": 3,
+  "manifest_version": 4,
   "sync_schema_version": 1,
   "api_prefix": "/api/v1",
   "defaults": {
@@ -945,6 +945,66 @@
       "source": "snapshot"
     },
     {
+      "resource": "treasury-payments",
+      "module": "Treasury",
+      "scope": "company",
+      "description": "Tahsilat ve ödeme belgeleri; taslaklar çevrimdışı oluşturulup düzenlenebilir ve silinebilir. Numara, onaya gönderme, kaydetme (post), ters kayıt ve iptal çevrimiçidir; push para hareketi veya yevmiye kaydı üretmez.",
+      "path": "/api/v1/treasury-payments",
+      "detail_path": "/api/v1/treasury-payments/{id}",
+      "api_resource": "App\\Modules\\Treasury\\Http\\Resources\\PaymentResource",
+      "requires": { "all_of": ["treasury.payments.view"] },
+      "read": "local-first",
+      "source": "pull",
+      "window_days": 30,
+      "window_field": "document_date",
+      "embeds": ["allocations"],
+      "query": {
+        "sort": {
+          "document_date": { "type": "date" },
+          "amount": { "type": "decimal" },
+          "status": { "type": "text" },
+          "number": { "type": "text" },
+          "created_at": { "type": "datetime" }
+        },
+        "filters": {
+          "status": { "match": "eq", "type": "string" },
+          "party_id": { "match": "eq", "type": "uuid" },
+          "account_id": { "match": "eq", "type": "uuid" },
+          "direction": { "match": "eq", "type": "string" },
+          "currency_code": { "match": "eq", "type": "string" }
+        },
+        "search": { "fields": ["number", "description"] }
+      },
+      "write": {
+        "mode": "draft-outbox",
+        "ops": [
+          {
+            "op": "create",
+            "route": "POST /api/v1/treasury-payments",
+            "requires": { "all_of": ["treasury.payments.create"] },
+            "version_check": "none"
+          },
+          {
+            "op": "update",
+            "route": "PATCH /api/v1/treasury-payments/{id}",
+            "requires": { "all_of": ["treasury.payments.update"] },
+            "version_check": "field-merge"
+          },
+          {
+            "op": "delete",
+            "route": "DELETE /api/v1/treasury-payments/{id}",
+            "requires": { "all_of": ["treasury.payments.delete"] },
+            "version_check": "exact"
+          }
+        ],
+        "derived_fields": [
+          { "when": ["*"], "derives": ["currency_code", "fx_rate"], "source": "Treasury/Services/PaymentService.php:76-77 (save: her yazmada para birimi hesabın para birimidir, kur TreasurySettings::rate ile yeniden doğrulanır; ana para biriminde 1)" }
+        ],
+        "draft_only": { "field": "status", "value": "draft" },
+        "conflict": "field-merge"
+      }
+    },
+    {
       "resource": "treasury-reports.receivables-ageing",
       "module": "Treasury",
       "scope": "company",
@@ -1122,7 +1182,6 @@
       "i18n_key": "desktop.onlineOnly.treasuryPayment",
       "category": "payment",
       "routes": [
-        "POST /api/v1/treasury-payments",
         "POST /api/v1/treasury-payments/{id}/submit",
         "POST /api/v1/treasury-payments/{id}/post",
         "POST /api/v1/treasury-payments/{id}/reverse",
@@ -1173,6 +1232,7 @@
       "routes": [
         "POST /api/v1/sales-documents/preview-totals",
         "POST /api/v1/purchase-documents/preview-totals",
+        "GET /api/v1/treasury-payments/{id}/preview",
         "GET /api/v1/pricing/resolve",
         "GET /api/v1/customers/{id}/exposure",
         "GET /api/v1/suppliers/{id}/exposure"

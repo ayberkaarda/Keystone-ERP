@@ -3,24 +3,20 @@
 declare(strict_types=1);
 
 use Illuminate\Database\QueryException;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tests\Support\Companies;
 use Tests\Support\Sync;
 
 /*
  * The real treasury_payments_immutable guard compares to_jsonb(OLD) and to_jsonb(NEW) minus
- * the reversal fields. With sync tracking bound to the table (rolled back with the test),
+ * the reversal fields. With the sync tracking of migration 2027_08_01_200700 bound to the table,
  * a posted -> reversed transition must still pass and any other change must still fail.
  */
 uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
-    Schema::table('treasury_payments', fn (Blueprint $table) => $table->syncable());
-
     $this->id = (string) Str::uuid7();
     $company = Companies::make();
 

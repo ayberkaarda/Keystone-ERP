@@ -7,10 +7,12 @@ namespace App\Modules\Treasury\Http\Controllers;
 use App\Core\Company\CompanyContext;
 use App\Core\Http\ApiResponse;
 use App\Core\Http\ListQuery;
+use App\Core\Sync\Rules\ClientKey;
 use App\Modules\Treasury\Contracts\TreasuryInvoiceAccess;
 use App\Modules\Treasury\Enums\AccountType;
 use App\Modules\Treasury\Enums\FlowDirection;
 use App\Modules\Treasury\Http\Resources\CoreResource;
+use App\Modules\Treasury\Http\Resources\PaymentResource;
 use App\Modules\Treasury\Models\TreasuryAccount;
 use App\Modules\Treasury\Models\TreasuryPayment;
 use App\Modules\Treasury\Models\TreasuryPaymentPlan;
@@ -230,10 +232,8 @@ final class TreasuryCoreController
             $data['balance'] = app(AccountService::class)->balance($record->id);
             $data['has_movements'] = DB::table('treasury_movements')->where('company_id', $record->company_id)->where('account_id', $record->id)->exists();
         }if ($record instanceof TreasuryPayment) {
-            $allocations = DB::table('treasury_allocations')->where('company_id', $record->company_id)->where('payment_id', $record->id)->orderBy('id')->get();
-            $visible = $allocations->filter(fn ($a): bool => Gate::allows('treasury-access', [$a->invoice_module === 'sales' ? 'sales.invoices.view' : 'purchasing.invoices.view']));
-            $data['allocations'] = $visible->map(fn ($a): array => get_object_vars($a))->values()->all();
-            $data['allocations_redacted'] = $visible->count() !== $allocations->count();
+            // The offline sync pulls the same shape (offline-manifest `treasury-payments`).
+            $data = (new PaymentResource($record))->resolve();
         }
 
         return $data;
@@ -270,6 +270,9 @@ final class TreasuryCoreController
         };
         if ($update) {
             $rules['version'] = ['required', 'integer', 'min:1'];
+        } elseif ($area === 'payments') {
+            // A client-generated key, as the offline draft carries it (SYNC-PROTOCOL "Mutasyon").
+            $rules['id'] = ['sometimes', 'bail', new ClientKey('treasury_payments'), 'string'];
         }$unknown = array_diff(array_keys($r->all()), array_keys($rules));
         if ($unknown !== []) {
             Treasury::fail((string) reset($unknown), 'unknown');

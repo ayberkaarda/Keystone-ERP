@@ -78,6 +78,28 @@
       "payload": {}
     },
     {
+      "idempotency_key": "0193b1f0-1111-7aaa-8bbb-00000000000c",
+      "op": "create",
+      "resource": "treasury-payments",
+      "id": "0193b1ea-3300-7f50-a555-9c0d1e2f3a80",
+      "base_version": null,
+      "changed_fields": [],
+      "occurred_at": "2026-10-25T18:20:00+03:00",
+      "payload": {
+        "direction": "payment",
+        "counterparty_module": "purchasing",
+        "account_id": "0193a000-0000-7000-8000-0000000000e1",
+        "party_id": "0193b1e4-2a7c-7d55-b8e9-3f4a5b6c7d10",
+        "document_date": "2026-10-25",
+        "fx_rate": "1",
+        "amount": "250.00",
+        "reference": "KASA-118",
+        "description": "Kırtasiye masrafı",
+        "currency_code": "TRY",
+        "allocations": []
+      }
+    },
+    {
       "idempotency_key": "0193b1f0-1111-7aaa-8bbb-00000000000a",
       "op": "create",
       "resource": "parties",
